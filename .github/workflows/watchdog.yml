@@ -1,0 +1,23 @@
+# Fails, so GitHub emails the repo owner, when the owner's PC hasn't run its daily
+# Coles id check (coles_id_daily.py in the app's repo) for two days. It sends nothing
+# to Coles: it only reads heartbeat.json, which that check rewrites every run.
+name: Coles id watchdog
+on:
+  schedule:
+    - cron: "0 23 * * *"   # about 10am in Sydney
+  workflow_dispatch:
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the PC's daily Coles id check is still running
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          checked=$(gh api "repos/${{ github.repository }}/contents/heartbeat.json" --jq .content | base64 -d | jq -r .checked)
+          age=$(( $(date +%s) - $(date -d "$checked" +%s) ))
+          echo "Last check: $checked, $(( age / 3600 )) hours ago"
+          if [ "$age" -gt $(( 48 * 3600 )) ]; then
+            echo "::error::The PC's daily Coles id check has not run for two days. Phones get no new Coles id until it does."
+            exit 1
+          fi
